@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agente de Reposição de Estoque</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .container {
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+      padding: 40px;
+      max-width: 600px;
+      width: 100%;
+    }
+
+    h1 {
+      color: #333;
+      margin-bottom: 30px;
+      font-size: 28px;
+      text-align: center;
+    }
+
+    .formulario {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .campo-grupo {
+      display: flex;
+      flex-direction: column;
+    }
+
+    label {
+      color: #333;
+      font-weight: 600;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    label .opcional {
+      font-weight: 400;
+      color: #999;
+    }
+
+    input {
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .botao {
+      padding: 12px 24px;
+      background-color: #667eea;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.3s;
+      margin-top: 10px;
+    }
+
+    .botao:hover {
+      background-color: #5568d3;
+    }
+
+    .botao:active {
+      transform: scale(0.98);
+    }
+
+    #resultado {
+      margin-top: 30px;
+      padding: 20px;
+      background-color: #f5f5f5;
+      border-radius: 6px;
+      border-left: 4px solid #667eea;
+      min-height: 60px;
+      display: none;
+    }
+
+    #resultado.ativo {
+      display: block;
+    }
+
+    #resultado pre {
+      margin: 0;
+      overflow-x: auto;
+      color: #333;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .erro {
+      border-left-color: #e74c3c !important;
+      background-color: #ffe6e6 !important;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Agente de Reposição de Estoque</h1>
+
+    <form class="formulario" id="formReposicao">
+      <div class="campo-grupo">
+        <label for="nomeProduto">Nome do Produto</label>
+        <input type="text" id="nomeProduto" name="nomeProduto" required>
+      </div>
+
+      <div class="campo-grupo">
+        <label for="estoqueAtual">Estoque Atual (unidades)</label>
+        <input type="number" id="estoqueAtual" name="estoqueAtual" min="0" required>
+      </div>
+
+      <div class="campo-grupo">
+        <label for="vendasDiarias">Vendas Médias Diárias (unidades/dia)</label>
+        <input type="number" id="vendasDiarias" name="vendasDiarias" min="0" step="0.01" required>
+      </div>
+
+      <div class="campo-grupo">
+        <label for="leadTime">Lead Time do Fornecedor (dias)</label>
+        <input type="number" id="leadTime" name="leadTime" min="0" required>
+      </div>
+
+      <div class="campo-grupo">
+        <label for="cnpjFornecedor">CNPJ do Fornecedor (14 dígitos)</label>
+        <input type="text" id="cnpjFornecedor" name="cnpjFornecedor" placeholder="00000000000000" maxlength="14" pattern="[0-9]{14}" required>
+      </div>
+
+      <div class="campo-grupo">
+        <label for="estoqueSeguranca">Estoque de Segurança <span class="opcional">(opcional, padrão 0)</span></label>
+        <input type="number" id="estoqueSeguranca" name="estoqueSeguranca" min="0" value="0">
+      </div>
+
+      <button type="submit" class="botao">Calcular Reposição</button>
+    </form>
+
+    <div id="resultado"></div>
+  </div>
+
+  <script>
+    const formReposicao = document.getElementById('formReposicao');
+    const divResultado = document.getElementById('resultado');
+
+    formReposicao.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      // Coletar valores do formulário
+      const dados = {
+        nomeProduto: document.getElementById('nomeProduto').value,
+        estoqueAtual: Number(document.getElementById('estoqueAtual').value),
+        vendasDiarias: Number(document.getElementById('vendasDiarias').value),
+        leadTime: Number(document.getElementById('leadTime').value),
+        cnpjFornecedor: document.getElementById('cnpjFornecedor').value,
+        estoqueSeguranca: Number(document.getElementById('estoqueSeguranca').value)
+      };
+
+      try {
+        const resposta = await fetch('http://localhost:3000/api/reposicao', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(dados)
+        });
+
+        if (!resposta.ok) {
+          throw new Error(`Erro HTTP: ${resposta.status}`);
+        }
+
+        const resultado = await resposta.json();
+
+        // Mostrar resultado formatado
+        divResultado.classList.add('ativo');
+        divResultado.classList.remove('erro');
+        divResultado.innerHTML = `<pre>${JSON.stringify(resultado, null, 2)}</pre>`;
+      } catch (erro) {
+        divResultado.classList.add('ativo', 'erro');
+        divResultado.innerHTML = `<pre>Erro ao buscar dados:\n${erro.message}</pre>`;
+        console.error('Erro:', erro);
+      }
+    });
+  </script>
+</body>
+</html>
