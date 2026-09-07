@@ -109,17 +109,101 @@
       display: block;
     }
 
-    #resultado pre {
-      margin: 0;
-      overflow-x: auto;
-      color: #333;
-      font-size: 13px;
-      line-height: 1.5;
-    }
-
     .erro {
       border-left-color: #e74c3c !important;
       background-color: #ffe6e6 !important;
+    }
+
+    .resultado-cartao {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .resultado-titulo {
+      font-size: 22px;
+      color: #333;
+      margin: 0;
+    }
+
+    .selo-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      width: fit-content;
+      padding: 8px 14px;
+      border-radius: 20px;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .selo-status--alerta {
+      background-color: #fff3cd;
+      color: #8a6300;
+    }
+
+    .selo-status--ok {
+      background-color: #d4edda;
+      color: #1e7e34;
+    }
+
+    .metricas {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .metrica-card {
+      flex: 1;
+      min-width: 150px;
+      background-color: #ffffff;
+      border: 1px solid #e5e5ea;
+      border-radius: 8px;
+      padding: 14px 16px;
+      text-align: center;
+    }
+
+    .metrica-valor {
+      font-size: 22px;
+      font-weight: 700;
+      color: #333;
+    }
+
+    .metrica-valor.metrica-valor--texto {
+      font-size: 15px;
+      font-weight: 600;
+      color: #667eea;
+    }
+
+    .metrica-label {
+      font-size: 13px;
+      color: #777;
+      margin-top: 4px;
+    }
+
+    .justificativa {
+      font-size: 15px;
+      line-height: 1.7;
+      color: #333;
+      margin: 0;
+    }
+
+    .selo-fornecedor {
+      font-size: 13px;
+      color: #666;
+      border-top: 1px solid #e5e5ea;
+      padding-top: 12px;
+    }
+
+    .selo-fornecedor--aviso {
+      color: #a05a00;
+    }
+
+    .erro-amigavel {
+      margin: 0;
+      color: #a12622;
+      font-size: 15px;
+      line-height: 1.6;
     }
   </style>
 </head>
@@ -181,6 +265,8 @@
         estoqueSeguranca: Number(document.getElementById('estoqueSeguranca').value)
       };
 
+      const MENSAGEM_ERRO_AMIGAVEL = 'Não foi possível calcular a reposição. Verifique os dados informados e tente novamente.';
+
       try {
         const resposta = await fetch('/api/reposicao', {
           method: 'POST',
@@ -191,21 +277,76 @@
         });
 
         if (!resposta.ok) {
-          throw new Error(`Erro HTTP: ${resposta.status}`);
+          const corpoErro = await resposta.json().catch(() => null);
+          console.error('Erro do servidor:', resposta.status, corpoErro);
+          throw new Error(MENSAGEM_ERRO_AMIGAVEL);
         }
 
         const resultado = await resposta.json();
-
-        // Mostrar resultado formatado
-        divResultado.classList.add('ativo');
-        divResultado.classList.remove('erro');
-        divResultado.innerHTML = `<pre>${JSON.stringify(resultado, null, 2)}</pre>`;
+        renderizarResultado(resultado);
       } catch (erro) {
-        divResultado.classList.add('ativo', 'erro');
-        divResultado.innerHTML = `<pre>Erro ao buscar dados:\n${erro.message}</pre>`;
         console.error('Erro:', erro);
+        renderizarErro(MENSAGEM_ERRO_AMIGAVEL);
       }
     });
+
+    function escaparHtml(texto) {
+      const div = document.createElement('div');
+      div.textContent = String(texto);
+      return div.innerHTML;
+    }
+
+    function renderizarResultado(resultado) {
+      const statusClasse = resultado.necessitaReposicao ? 'selo-status--alerta' : 'selo-status--ok';
+      const statusTexto = resultado.necessitaReposicao
+        ? '⚠ Necessita reposição'
+        : '✓ Estoque OK, sem necessidade de reposição';
+
+      const temQuantidadeSugerida = Number(resultado.quantidadeSugerida) > 0;
+      const quantidadeTexto = temQuantidadeSugerida
+        ? `${resultado.quantidadeSugerida} unidades`
+        : 'Nenhuma reposição necessária';
+      const quantidadeClasse = temQuantidadeSugerida ? '' : 'metrica-valor--texto';
+
+      let seloFornecedorHtml;
+      if (resultado.fornecedor && resultado.fornecedor.sucesso) {
+        seloFornecedorHtml = `
+          <div class="selo-fornecedor">
+            ✓ Fornecedor validado: ${escaparHtml(resultado.fornecedor.razaoSocial)} — situação ${escaparHtml(resultado.fornecedor.situacaoCadastral)}
+          </div>`;
+      } else {
+        const motivo = (resultado.fornecedor && resultado.fornecedor.motivo) || 'motivo não informado';
+        seloFornecedorHtml = `
+          <div class="selo-fornecedor selo-fornecedor--aviso">
+            ⚠ Não foi possível validar o fornecedor: ${escaparHtml(motivo)}
+          </div>`;
+      }
+
+      divResultado.className = 'ativo';
+      divResultado.innerHTML = `
+        <div class="resultado-cartao">
+          <h2 class="resultado-titulo">${escaparHtml(resultado.nomeProduto)}</h2>
+          <span class="selo-status ${statusClasse}">${statusTexto}</span>
+          <div class="metricas">
+            <div class="metrica-card">
+              <div class="metrica-valor">${escaparHtml(resultado.pontoDePedido)} unidades</div>
+              <div class="metrica-label">Ponto de Pedido</div>
+            </div>
+            <div class="metrica-card">
+              <div class="metrica-valor ${quantidadeClasse}">${escaparHtml(quantidadeTexto)}</div>
+              <div class="metrica-label">Quantidade Sugerida</div>
+            </div>
+          </div>
+          <p class="justificativa">${escaparHtml(resultado.justificativa)}</p>
+          ${seloFornecedorHtml}
+        </div>
+      `;
+    }
+
+    function renderizarErro(mensagem) {
+      divResultado.className = 'ativo erro';
+      divResultado.innerHTML = `<p class="erro-amigavel">${escaparHtml(mensagem)}</p>`;
+    }
   </script>
 </body>
 </html>
